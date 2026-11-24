@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memoria: partes del cuerpo</title>
+<style>
+:root{--bg:#fff8ef;--panel:#ffffff;--ink:#2b2438;--muted:#6b6478;--accent:#ff7a59;--accent-ink:#ffffff;--back:#7b61ff;--ok:#2fb67c;--line:#eadfce;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1726;--panel:#272135;--ink:#f4efff;--muted:#b3aac6;--accent:#ff8f72;--accent-ink:#2b1a14;--back:#6a54e6;--ok:#3cc78c;--line:#3a3250;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1b1726;--panel:#272135;--ink:#f4efff;--muted:#b3aac6;--accent:#ff8f72;--accent-ink:#2b1a14;--back:#6a54e6;--ok:#3cc78c;--line:#3a3250;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Nunito","Trebuchet MS",system-ui,sans-serif;min-height:100vh}
+main{max-width:520px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:1.7rem;margin:0 0 4px;text-align:center}
+.sub{margin:0 0 16px;text-align:center;color:var(--muted)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}
+button{font:inherit;color:inherit;cursor:pointer}
+.seg button{border:0;background:transparent;padding:8px 13px;font-weight:700;font-size:.9rem}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool{border:2px solid var(--line);background:var(--panel);border-radius:999px;padding:8px 14px;font-weight:700;font-size:.9rem}
+.stats{display:flex;justify-content:center;gap:20px;margin:12px 0;font-weight:700;color:var(--muted)}
+.stats b{color:var(--ink)}
+#grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.card{position:relative;aspect-ratio:1/1;border:0;border-radius:16px;padding:2px;background:var(--back);color:#fff;font-size:2rem;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.card .face{display:none;align-items:center;justify-content:center;width:100%;height:100%;border-radius:14px;background:var(--panel);color:var(--ink);text-align:center}
+.card .face.img{font-size:clamp(2rem,10vw,3.2rem)}
+.card .face.word{font-size:clamp(.85rem,4.2vw,1.25rem);word-break:break-word;padding:2px}
+.card.up{background:var(--line);animation:pop .25s ease}
+.card.up .face{display:flex}
+.card.up .back{display:none}
+.card.ok{background:var(--ok)}
+.card:disabled{cursor:default}
+@keyframes pop{from{transform:scale(.88)}to{transform:scale(1)}}
+#win{margin-top:18px;text-align:center;background:var(--panel);border:2px solid var(--ok);border-radius:18px;padding:16px}
+#win[hidden]{display:none}
+#win p{margin:0 0 10px;font-size:1.15rem;font-weight:700}
+#win button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:10px 20px;font-weight:800}
+@media (prefers-reduced-motion:reduce){.card.up{animation:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Memoria del cuerpo</h1>
+  <p class="sub">Encuentra las parejas. Toca una carta para oír la palabra.</p>
+  <div class="bar">
+    <div class="seg" id="lvl" role="group" aria-label="Nivel">
+      <button data-n="4">Fácil</button><button data-n="6">Normal</button><button data-n="8">Difícil</button>
+    </div>
+    <div class="seg" id="mode" role="group" aria-label="Modo">
+      <button data-m="pw">Imagen y palabra</button><button data-m="pp">Imagen igual</button>
+    </div>
+  </div>
+  <div class="bar">
+    <button class="tool" id="snd" aria-label="Sonido">🔊 Sonido</button>
+    <button class="tool" id="new">🔄 Nueva partida</button>
+  </div>
+  <div class="stats"><span>Intentos: <b id="mv">0</b></span><span>Parejas: <b id="fd">0</b>/<b id="tt">0</b></span></div>
+  <div id="grid"></div>
+  <div id="win" hidden><p id="wmsg"></p><button id="again">Jugar otra vez</button></div>
+</main>
+<script>
+const PARTS=[['ojo','👁️'],['oreja','👂'],['nariz','👃'],['boca','👄'],['mano','✋'],['pie','🦶'],['pierna','🦵'],['brazo','💪'],['lengua','👅'],['diente','🦷'],['cerebro','🧠'],['corazón','🫀']];
+let n=6,mode='pw',sound=true,deck=[],open=[],found=0,moves=0,lock=false;
+const $=id=>document.getElementById(id);
+const grid=$('grid'),win=$('win');
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function say(t){
+  if(!sound||!('speechSynthesis' in window))return;
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='es-ES';u.rate=.85;speechSynthesis.speak(u);}catch(e){}
+}
+function update(){$('mv').textContent=moves;$('fd').textContent=found;$('tt').textContent=n;
+  document.querySelectorAll('#lvl button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.n===n)));
+  document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===mode)));
+  $('snd').textContent=sound?'🔊 Sonido':'🔇 Sin sonido';}
+function start(){
+  try{speechSynthesis.cancel();}catch(e){}
+  moves=0;found=0;open=[];lock=false;win.hidden=true;
+  deck=[];
+  shuffle(PARTS.slice()).slice(0,n).forEach(([w,e],i)=>{
+    deck.push({i,w,e,k:'img'});
+    deck.push({i,w,e,k:mode==='pw'?'word':'img'});
+  });
+  shuffle(deck);
+  grid.innerHTML='';
+  deck.forEach((c,idx)=>{
+    const b=document.createElement('button');
+    b.className='card';
+    b.setAttribute('aria-label','Carta '+(idx+1));
+    b.innerHTML='<span class="back">?</span><span class="face '+c.k+'">'+(c.k==='img'?c.e:c.w)+'</span>';
+    b.onclick=()=>flip(b,c);
+    grid.appendChild(b);
+  });
+  update();
+}
+function flip(b,c){
+  if(lock||b.classList.contains('up'))return;
+  b.classList.add('up');say(c.w);open.push([b,c]);
+  if(open.length<2)return;
+  moves++;
+  const [[b1,c1],[b2,c2]]=open;
+  if(c1.i===c2.i){
+    b1.classList.add('ok');b2.classList.add('ok');b1.disabled=b2.disabled=true;
+    found++;open=[];update();
+    if(found===n)setTimeout(()=>{$('wmsg').textContent='¡Muy bien! Lo has conseguido en '+moves+' intentos.';win.hidden=false;say('¡Muy bien!');},600);
+  }else{
+    lock=true;update();
+    setTimeout(()=>{b1.classList.remove('up');b2.classList.remove('up');open=[];lock=false;},1000);
+  }
+}
+document.querySelectorAll('#lvl button').forEach(b=>b.onclick=()=>{n=+b.dataset.n;start();});
+document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;start();});
+$('snd').onclick=()=>{sound=!sound;if(!sound){try{speechSynthesis.cancel();}catch(e){}}update();};
+$('new').onclick=start;$('again').onclick=start;
+start();
+</script>
+</body>
+</html>
